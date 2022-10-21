@@ -19,10 +19,24 @@ APIKEY=""
 #####################################
 
 #####################################
+### Needed for Collections        ###
+#####################################
+# User from which wallpapers should be downloaded
+# used for TYPE=useruploads and TYPE=collections
+# If you want to download your own Collection
+# this has to be set to your username
+USR="doctorfree"
+#####################################
+### End needed for Collections    ###
+#####################################
+
+#####################################
 ###     Configuration Options     ###
 #####################################
+# Should informative messages be suppressed?
+QUIET=
 # Where should the Wallpapers be stored?
-LOCATION=/location/to/your/wallpaper/folder
+LOCATION=/Volumes/Seagate_8TB/Pictures/Work/Wallhaven
 # How many Wallpapers should be downloaded, should be multiples of the
 # value in the THUMBS Variable
 WPNUMBER=48
@@ -39,7 +53,7 @@ CATEGORIES=111
 # filter wallpapers before downloading, first number is for sfw content,
 # second for sketchy content, third for nsfw content, 1 to enable,
 # 0 to disable
-FILTER=110
+FILTER=001
 # Which Resolutions should be downloaded, leave empty for all (most common
 # resolutions possible, for details see wallhaven site), separate multiple
 # resolutions with , eg. 1920x1080,1920x1200
@@ -55,7 +69,7 @@ ATLEAST=
 ASPECTRATIO=
 # Which Type should be displayed (relevance, random, date_added, views,
 # favorites, toplist, toplist-beta)
-MODE=random
+MODE=relevance
 # if MODE is set to toplist show the toplist for the given timeframe
 # possible values: 1d (last day), 3d (last 3 days), 1w (last week),
 # 1M (last month), 3M (last 3 months), 6M (last 6 months), 1y (last year)
@@ -83,10 +97,6 @@ COLOR=""
 # Should the search results be saved to a separate subfolder?
 # 0 for no separate folder, 1 for separate subfolder
 SUBFOLDER=0
-# User from which wallpapers should be downloaded
-# used for TYPE=useruploads and TYPE=collections
-# If you want to download your own Collection this has to be set to your username
-USR="AksumkA"
 # use gnu parallel to speed up the download (0, 1), if set to 1 make sure
 # you have gnuparallel installed, see normal.vs.parallel.txt for
 # speed improvements
@@ -102,7 +112,10 @@ THUMBS=24
 #####################################
 
 function checkDependencies {
-    printf "Checking dependencies..."
+    [ "$QUIET" ] || {
+        printf "Checking dependencies..."
+    }
+
     dependencies=(wget jq sed)
     [[ $PARALLEL == 1 ]] && dependencies+=(parallel)
 
@@ -114,7 +127,9 @@ function checkDependencies {
 
     if [[ $deps -ne 1 ]]
     then
-        printf "OK\n"
+        [ "$QUIET" ] || {
+            printf "OK\n"
+        }
     else
         printf "\nInstall the above and rerun this script\n"
         exit 1
@@ -166,10 +181,13 @@ function getPage {
 # arg1: the file containing the wallpapers
 #
 function downloadWallpapers {
-    if (( "$page" >= "$(jq -r ".meta.last_page" tmp)" ))
-    then
+    lpchk=$(jq -r ".meta.last_page" tmp)
+    [ "${lpchk}" ] && {
+      if (( "$page" >= "$(jq -r ".meta.last_page" tmp)" ))
+      then
         downloadEndReached=true
-    fi
+      fi
+    }
 
     for ((i=0; i<THUMBS; i++))
     do
@@ -178,7 +196,9 @@ function downloadWallpapers {
         filename=$(echo "$imgURL"| sed "s/.*\///" )
         if grep -w "$filename" downloaded.txt >/dev/null
         then
-            printf "\\tWallpaper %s already downloaded!\\n" "$imgURL"
+            [ "$QUIET" ] || {
+                printf "\\tWallpaper %s already downloaded!\\n" "$imgURL"
+            }
         elif [ $PARALLEL == 1 ]
         then
             echo "$imgURL" >> download.txt
@@ -246,6 +266,7 @@ function WGET {
     fi
 
     # default wget command
+    # wget -c -q --header="$httpHeader" "$@"
     wget --server-response -q --header="$httpHeader" --keep-session-cookies \
          --save-cookies cookies.txt --load-cookies cookies.txt "$@" 2>&1 | \
          grep "429 Too Many Requests" >/dev/null && coolDown "$@"
@@ -283,7 +304,7 @@ function helpText {
     printf ",\\n\\t\\t\\tdate_added, views, favorites \\n"
     printf " -o, --order\\t\\torder ascending (asc) or descending "
     printf "(desc)\\n"
-    printf " -b, --collection\\tname of the collections to download\\n"
+    printf " -b, --collection\\tname of the collection to download\\n"
     printf " -q, --query\\t\\tsearch query, eg. 'mario', single "
     printf "quotes needed,\\n\\t\\t\\tfor searching exact phrases use double "
     printf "quotes \\n\\t\\t\\tinside single quotes, eg. '\"super mario\"'"
@@ -328,6 +349,9 @@ while [[ $# -ge 1 ]]
         -n|--number)
             WPNUMBER="$2"
             shift;;
+        -Q|--quiet)
+            QUIET=1
+            ;;
         -s|--startpage)
             STARTPAGE="$2"
             shift;;
@@ -425,15 +449,21 @@ then
             count< "$WPNUMBER";
             count=count+"$THUMBS", page=page+1 ));
     do
-        printf "Download Page %s\\n" "$page"
+        [ "$QUIET" ] || {
+            printf "Download Page %s\\n" "$page"
+        }
         s1="search?page=$page&categories=$CATEGORIES&purity=$FILTER&"
         s1+="atleast=$ATLEAST&resolutions=$RESOLUTION&ratios=$ASPECTRATIO"
         s1+="&sorting=$MODE&order=$ORDER&topRange=$TOPRANGE&colors=$COLOR"
         getPage "$s1"
-        printf "\\t- done!\\n"
-        printf "Download Wallpapers from Page %s\\n" "$page"
+        [ "$QUIET" ] || {
+            printf "\\t- done!\\n"
+            printf "Download Wallpapers from Page %s\\n" "$page"
+        }
         downloadWallpapers
-        printf "\\t- done!\\n"
+        [ "$QUIET" ] || {
+            printf "\\t- done!\\n"
+        }
         if [ "$downloadEndReached" = true ]
         then
             break
@@ -446,7 +476,9 @@ then
             count< "$WPNUMBER";
             count=count+"$THUMBS", page=page+1 ));
     do
-        printf "Download Page %s\\n" "$page"
+        [ "$QUIET" ] || {
+            printf "Download Page %s\\n" "$page"
+        }
         s1="search?page=$page&categories=$CATEGORIES&purity=$FILTER&"
         s1+="atleast=$ATLEAST&resolutions=$RESOLUTION&ratios=$ASPECTRATIO"
         s1+="&sorting=$MODE&order=desc&topRange=$TOPRANGE&colors=$COLOR"
@@ -459,16 +491,19 @@ then
         fi
 
         getPage "$s1"
-        printf "\\t- done!\\n"
-        printf "Download Wallpapers from Page %s\\n" "$page"
+        [ "$QUIET" ] || {
+            printf "\\t- done!\\n"
+            printf "Download Wallpapers from Page %s\\n" "$page"
+        }
         downloadWallpapers
-        printf "\\t- done!\\n"
+        [ "$QUIET" ] || {
+            printf "\\t- done!\\n"
+        }
         if [ "$downloadEndReached" = true ]
         then
             break
         fi
     done
-
 elif [ "$TYPE" == collections ]
 then
     if [ "$USR" == "" ]
@@ -481,7 +516,6 @@ then
     fi
 
     getPage "collections/$USR"
-
 
     i=0
     while
@@ -518,5 +552,5 @@ else
     printf "error in TYPE please check Variable\\n"
 fi
 
+# rm -f cookies.txt login login.1 favtmp
 rm -f cookies.txt
-
